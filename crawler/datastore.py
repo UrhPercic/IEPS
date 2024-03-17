@@ -79,3 +79,12 @@ class DataStore:
             cur.execute("SELECT id FROM crawldb.page WHERE url = %s;", (url,))
             result = cur.fetchone()
             return result[0] if result else None
+
+    def get_page_id_by_base_url(self, url):
+        with self.get_cursor() as cur:
+            base_url = url.rsplit('/', 1)[0]
+
+            cur.execute("SELECT id FROM crawldb.page WHERE url LIKE %s;", (base_url + '%',))
+            result = cur.fetchone()
+
+            return result[0] if result else None

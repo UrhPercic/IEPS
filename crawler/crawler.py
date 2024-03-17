@@ -50,6 +50,9 @@ def crawl():
             images = extract_images(content)
             page_id = datastore.store_page(site_id, 'HTML', url, content, status_code, time.strftime('%d-%m-%Y %H:%M:%S'))
 
+            from_page_id = datastore.get_page_id_by_base_url(url)
+            datastore.store_link(from_page_id, page_id)
+
             for image_url in images:
                 content_type = get_content_type(image_url)
                 image_data = download_and_convert_image_to_binary(url, image_url)
