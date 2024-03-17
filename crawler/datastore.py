@@ -64,24 +64,18 @@ class DataStore:
             except Exception as e:
                 print(f"Error storing image: {e}")
 
-    def store_link_from_urls(self, from_url, to_url):
+    def store_link(self, from_page_id, to_page_id):
         with self.get_cursor() as cur:
             try:
-                cur.execute("SELECT id FROM crawldb.page WHERE url = %s", (from_url,))
-                from_page_id = cur.fetchone()
-                if not from_page_id:
-                    print(f"From URL not found in database: {from_url}")
-                    return
-
-                cur.execute("SELECT id FROM crawldb.page WHERE url = %s", (to_url,))
-                to_page_id = cur.fetchone()
-                if not to_page_id:
-                    print(f"To URL not found in database: {to_url}")
-                    return
-
                 cur.execute("""
                     INSERT INTO crawldb.link (from_page, to_page)
                     VALUES (%s, %s)
-                    """, (from_page_id[0], to_page_id[0]))
+                    """, (from_page_id, to_page_id))
             except Exception as e:
                 print(f"Error storing link: {e}")
+
+    def check_page_exists(self, url):
+        with self.get_cursor() as cur:
+            cur.execute("SELECT id FROM crawldb.page WHERE url = %s;", (url,))
+            result = cur.fetchone()
+            return result[0] if result else None

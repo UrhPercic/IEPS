@@ -5,7 +5,7 @@ from extractor import extract_links, extract_images
 from datastore import DataStore
 from duplicate_detector import DuplicateDetector
 from frontier import URLFrontier
-from utils import get_content_type
+from utils import get_content_type, download_and_convert_image_to_binary
 
 frontier = URLFrontier()
 datastore = DataStore()
@@ -52,8 +52,9 @@ def crawl():
 
             for image_url in images:
                 content_type = get_content_type(image_url)
+                image_data = download_and_convert_image_to_binary(url, image_url)
                 truncated_image_url = image_url[:255]
-                datastore.store_image(page_id, truncated_image_url, content_type, None, time.strftime('%d-%m-%Y %H:%M:%S'))
+                datastore.store_image(page_id, truncated_image_url, content_type, image_data, time.strftime('%d-%m-%Y %H:%M:%S'))
 
             for _, link_url in link_tuples:
                 canonicalized_link_url = duplicate_detector.canonicalize(link_url)

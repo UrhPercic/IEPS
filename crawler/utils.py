@@ -1,5 +1,7 @@
 import mimetypes
 import requests
+from io import BytesIO
+from urllib.parse import urljoin
 
 def get_content_type (image_url):
     content_type, _ = mimetypes.guess_type(image_url)
@@ -13,6 +15,15 @@ def get_content_type (image_url):
         pass
 
     return 'application/octet-stream'
+
+def download_and_convert_image_to_binary(base_url, image_url):
+    absolute_image_url = urljoin(base_url, image_url)
+    try:
+        response = requests.get(absolute_image_url)
+        response.raise_for_status()
+        return BytesIO(response.content).getvalue()
+    except requests.RequestException as e:
+        return None
 
 def fetch_robots_content(domain):
     try:
