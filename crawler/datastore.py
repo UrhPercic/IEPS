@@ -1,5 +1,5 @@
 import psycopg2
-from psycopg2 import sql
+from utils import fetch_robots_content, fetch_sitemap_content
 from contextlib import contextmanager
 
 class DataStore:
@@ -26,11 +26,19 @@ class DataStore:
         with self.get_cursor() as cur:
             cur.execute("SELECT id FROM crawldb.site WHERE domain = %s;", (domain,))
             result = cur.fetchone()
+
             if result:
                 return result[0]
             else:
-                cur.execute("INSERT INTO crawldb.site (domain) VALUES (%s) RETURNING id;", (domain,))
-                return cur.fetchone()[0]  # No need to call commit due to autocommit
+                robots_content = fetch_robots_content(domain)
+                sitemap_content = fetch_sitemap_content(domain)
+
+                cur.execute("""
+                    INSERT INTO crawldb.site (domain, robots_content, sitemap_content)
+                    VALUES (%s, %s, %s) RETURNING id;
+                """, (domain, robots_content, sitemap_content))
+
+                return cur.fetchone()[0]
 
     def store_page(self, site_id, page_type_code, url, html_content, http_status_code, accessed_time):
         with self.get_cursor() as cur:
@@ -77,4 +85,3 @@ class DataStore:
                     """, (from_page_id[0], to_page_id[0]))
             except Exception as e:
                 print(f"Error storing link: {e}")
-

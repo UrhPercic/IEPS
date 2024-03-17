@@ -5,8 +5,7 @@ from extractor import extract_links, extract_images
 from datastore import DataStore
 from duplicate_detector import DuplicateDetector
 from frontier import URLFrontier
-import mimetypes
-import requests
+from utils import get_content_type
 
 frontier = URLFrontier()
 datastore = DataStore()
@@ -17,20 +16,6 @@ for url in seed_urls:
     frontier.add_url(url)
 
 num_worker_threads = 4
-
-def get_content_type(image_url):
-    content_type, _ = mimetypes.guess_type(image_url)
-    if content_type:
-        return content_type
-
-    try:
-        response = requests.head(image_url, timeout=10)
-        if 'Content-Type' in response.headers:
-            return response.headers['Content-Type']
-    except requests.RequestException:
-        pass
-
-    return 'application/octet-stream'
 
 def get_site_id_from_url(url):
     from urllib.parse import urlparse
@@ -74,7 +59,6 @@ def crawl():
                 canonicalized_link_url = duplicate_detector.canonicalize(link_url)
                 if not duplicate_detector.is_duplicate(canonicalized_link_url):
                     frontier.add_url(canonicalized_link_url)
-                    datastore.store_link_from_urls(url, canonicalized_link_url)
 
         else:
             print(f"Failed to fetch content from {url}")
