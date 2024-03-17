@@ -5,6 +5,8 @@ from extractor import extract_links, extract_images
 from datastore import DataStore
 from duplicate_detector import DuplicateDetector
 from frontier import URLFrontier
+import mimetypes
+import requests
 
 frontier = URLFrontier()
 datastore = DataStore()
@@ -15,6 +17,20 @@ for url in seed_urls:
     frontier.add_url(url)
 
 num_worker_threads = 4
+
+def get_content_type(image_url):
+    content_type, _ = mimetypes.guess_type(image_url)
+    if content_type:
+        return content_type
+
+    try:
+        response = requests.head(image_url, timeout=10)
+        if 'Content-Type' in response.headers:
+            return response.headers['Content-Type']
+    except requests.RequestException:
+        pass
+
+    return 'application/octet-stream'
 
 def get_site_id_from_url(url):
     from urllib.parse import urlparse
@@ -45,22 +61,24 @@ def crawl():
         content, status_code = download_page(url)
 
         if content is not None and status_code == 200:
-            links = extract_links(content)
+            link_tuples = extract_links(content, url)
             images = extract_images(content)
-            page_id = datastore.store_page(site_id, 'HTML', url, content, status_code, time.strftime('%Y-%m-%d %H:%M:%S'))
+            page_id = datastore.store_page(site_id, 'HTML', url, content, status_code, time.strftime('%d-%m-%Y %H:%M:%S'))
 
             for image_url in images:
-                datastore.store_image(page_id, image_url, 'image/png', None, time.strftime('%Y-%m-%d %H:%M:%S'))
+                content_type = get_content_type(image_url)
+                truncated_image_url = image_url[:255]
+                datastore.store_image(page_id, truncated_image_url, content_type, None, time.strftime('%d-%m-%Y %H:%M:%S'))
 
-            for link in links:
-                canonicalized_link = duplicate_detector.canonicalize(link)
-                if not duplicate_detector.is_duplicate(canonicalized_link):
-                    frontier.add_url(canonicalized_link)
+            for _, link_url in link_tuples:
+                canonicalized_link_url = duplicate_detector.canonicalize(link_url)
+                if not duplicate_detector.is_duplicate(canonicalized_link_url):
+                    frontier.add_url(canonicalized_link_url)
+                    datastore.store_link_from_urls(url, canonicalized_link_url)
+
         else:
             print(f"Failed to fetch content from {url}")
         time.sleep(5)
-
-
 
 def start_crawling():
     threads = []
