@@ -40,7 +40,7 @@ class DataStore:
 
                 return cur.fetchone()[0]
 
-    def store_page(self, site_id, page_type_code, url, html_content, http_status_code, accessed_time):
+    def store_page(self, site_id, page_type_code, url, html_content, http_status_code, accessed_time, content_hash):
         with self.get_cursor() as cur:
             cur.execute("SELECT id FROM crawldb.page WHERE url = %s;", (url,))
             if cur.fetchone():
@@ -48,11 +48,21 @@ class DataStore:
                 return None
             else:
                 cur.execute("""
-                    INSERT INTO crawldb.page (site_id, page_type_code, url, html_content, http_status_code, accessed_time)
-                    VALUES (%s, %s, %s, %s, %s, %s) RETURNING id
-                """, (site_id, page_type_code, url, html_content, http_status_code, accessed_time))
+                    INSERT INTO crawldb.page (site_id, page_type_code, url, html_content, http_status_code, accessed_time, content_hash)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id;
+                """, (site_id, page_type_code, url, html_content, http_status_code, accessed_time, content_hash))
                 page_id = cur.fetchone()[0]
                 return page_id
+
+    def store_page_data(self, page_id, data_type_code, data):
+        with self.get_cursor() as cur:
+            try:
+                cur.execute("""
+                    INSERT INTO crawldb.page_data (page_id, data_type_code, data)
+                    VALUES (%s, %s, %s)
+                """, (page_id, data_type_code, data))
+            except Exception as e:
+                print(f"Error storing page data: {e}")
 
     def store_image(self, page_id, filename, content_type, data, accessed_time):
         with self.get_cursor() as cur:

@@ -2,6 +2,7 @@ import mimetypes
 import requests
 from io import BytesIO
 from urllib.parse import urljoin
+import hashlib
 
 def get_content_type (image_url):
     content_type, _ = mimetypes.guess_type(image_url)
@@ -42,3 +43,41 @@ def fetch_sitemap_content(domain):
     except requests.RequestException:
         pass
     return None
+
+def download_binary_content(url):
+    try:
+        response = requests.get(url)
+        response.raise_for_status()
+        return response.content
+    except requests.RequestException as e:
+        print(f"Error downloading binary content from {url}: {e}")
+        return None
+
+def get_mime_type_category(mime_type):
+    if 'text/html' in mime_type:
+        return 'HTML'
+    elif 'application/pdf' in mime_type:
+        return 'PDF'
+    elif 'application/msword' in mime_type or 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' in mime_type:
+        return 'DOC'
+    elif 'application/vnd.ms-powerpoint' in mime_type or 'application/vnd.openxmlformats-officedocument.presentationml.presentation' in mime_type:
+        return 'PPT'
+    else:
+        return 'UNKNOWN'
+
+def get_page_type(url):
+    mime_type, _ = mimetypes.guess_type(url)
+    if mime_type:
+        return get_mime_type_category(mime_type)
+    try:
+        response = requests.head(url, timeout=10)
+        if 'Content-Type' in response.headers:
+            content_type = response.headers['Content-Type'].split(';')[0]
+            return get_mime_type_category(content_type)
+    except requests.RequestException:
+        pass
+
+    return 'UNKNOWN'
+
+def hash_html_content(html_content):
+    return hashlib.md5(html_content.encode('utf-8')).hexdigest()
