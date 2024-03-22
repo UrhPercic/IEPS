@@ -3,6 +3,8 @@ import requests
 from io import BytesIO
 from urllib.parse import urljoin
 import hashlib
+from urllib.robotparser import RobotFileParser
+from xml.etree import ElementTree
 
 def get_content_type (image_url):
     content_type, _ = mimetypes.guess_type(image_url)
@@ -43,6 +45,31 @@ def fetch_sitemap_content(domain):
     except requests.RequestException:
         pass
     return None
+
+def fetch_robots_rules(domain):
+    robots_url = f"http://{domain}/robots.txt"
+    parser = RobotFileParser(robots_url)
+    try:
+        parser.read()
+        return parser
+    except Exception as e:
+        print(f"Error fetching or parsing robots.txt for {domain}: {e}")
+    return None
+
+def fetch_sitemap_urls(sitemap_url):
+    try:
+        response = requests.get(sitemap_url)
+        response.raise_for_status()
+
+        sitemap = response.content
+        root = ElementTree.fromstring(sitemap)
+
+        namespace = {'sitemap': 'http://www.sitemaps.org/schemas/sitemap/0.9'}
+        urls = [url.text for url in root.findall('sitemap:url/sitemap:loc', namespace)]
+        return urls
+    except Exception as e:
+        print(f"Error fetching or parsing sitemap.xml: {e}")
+    return []
 
 def download_binary_content(url):
     try:
