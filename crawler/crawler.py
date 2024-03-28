@@ -16,7 +16,7 @@ seed_urls = ["http://gov.si", "http://evem.gov.si", "http://e-uprava.gov.si", "h
 for url in seed_urls:
     frontier.add_url(url)
 
-num_worker_threads = 4
+num_worker_threads = 6
 
 def get_site_id_from_url(url):
     domain = urlparse(url).netloc
@@ -77,11 +77,10 @@ def crawl():
                             canonicalized_link_url = duplicate_detector.canonicalize(link_url)
                             frontier.add_url(canonicalized_link_url)
                 else:
-                    binary_data = download_binary_content(url)
-                    if binary_data:
-                        page_id = datastore.store_page(site_id, 'BINARY', url, None, status_code, time.strftime('%d-%m-%Y %H:%M:%S'), None)
-                        if page_id and page_type != "UNKNOWN":
-                            datastore.store_page_data(page_id, page_type, binary_data)
+                    page_id = datastore.store_page(site_id, 'BINARY', url, None, status_code, time.strftime('%d-%m-%Y %H:%M:%S'), None)
+                    if page_id and page_type != "UNKNOWN":
+                        data = download_binary_content(url)
+                        datastore.store_page_data(page_id, page_type, data)
             else:
                 print(f"Failed to fetch content from {url}")
         else:

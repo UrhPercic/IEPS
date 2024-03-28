@@ -56,21 +56,6 @@ def fetch_robots_rules(domain):
         print(f"Error fetching or parsing robots.txt for {domain}: {e}")
     return None
 
-def fetch_sitemap_urls(sitemap_url):
-    try:
-        response = requests.get(sitemap_url)
-        response.raise_for_status()
-
-        sitemap = response.content
-        root = ElementTree.fromstring(sitemap)
-
-        namespace = {'sitemap': 'http://www.sitemaps.org/schemas/sitemap/0.9'}
-        urls = [url.text for url in root.findall('sitemap:url/sitemap:loc', namespace)]
-        return urls
-    except Exception as e:
-        print(f"Error fetching or parsing sitemap.xml: {e}")
-    return []
-
 def download_binary_content(url):
     try:
         response = requests.get(url)
