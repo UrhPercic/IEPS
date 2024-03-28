@@ -8,7 +8,7 @@ class DuplicateDetector:
     def is_duplicate(self, content):
         hashed_content = hash_html_content(content)
         with self.datastore.conn.cursor() as cur:
-            cur.execute("SELECT COUNT(*) FROM crawldb.page WHERE content_hash = %s", (hashed_content,))
+            cur.execute("SELECT COUNT(*) FROM crawldb.page WHERE content_hash = %s AND content_hash != null", (hashed_content,))
             return cur.fetchone()[0] > 0
 
     def canonicalize(self, url):

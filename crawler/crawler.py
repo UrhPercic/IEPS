@@ -4,67 +4,58 @@ from downloader import download_page
 from extractor import extract_links, extract_images
 from datastore import DataStore
 from duplicate_detector import DuplicateDetector
-from frontier import URLFrontier
 from urllib.parse import urlparse
 from utils import get_content_type, download_and_convert_image_to_binary, get_page_type, download_binary_content, hash_html_content, fetch_robots_rules
 
-frontier = URLFrontier()
 datastore = DataStore()
 duplicate_detector = DuplicateDetector(datastore)
 
 seed_urls = ["http://gov.si", "http://evem.gov.si", "http://e-uprava.gov.si", "http://e-prostor.gov.si"]
 for url in seed_urls:
-    frontier.add_url(url)
+    domain = urlparse(url).netloc
+    site_id = datastore.get_or_create_site_id(domain)
+    if not datastore.check_page_exists(url):
+        datastore.store_page(site_id, 'FRONTIER', url, None, None, None, None)
 
 num_worker_threads = 6
 
-def get_site_id_from_url(url):
-    domain = urlparse(url).netloc
-    return datastore.get_or_create_site_id(domain)
-
-site_ids = {}
-for url in seed_urls:
-    site_id = get_site_id_from_url(url)
-    site_ids[url] = site_id
-    frontier.add_url(url)
-
 robot_rules = {}
+robot_delays = {}
 def crawl():
+    while True:
+        frontier_pages = datastore.fetch_frontier_pages(limit=10)
 
-    while not frontier.empty():
-        url = frontier.get_url()
-        domain = urlparse(url).netloc
+        if not frontier_pages:
+            time.sleep(5)
+            continue
 
-        global site_ids
-        global robot_rules
+        for page_id, url in frontier_pages:
+            domain = urlparse(url).netloc
+            site_id = datastore.get_or_create_site_id(domain)
 
-        if domain not in robot_rules:
-            robot_rules[domain] = fetch_robots_rules(domain)
+            if domain not in robot_rules or domain not in robot_delays:
+                robot_rules[domain], robot_delays[domain] = fetch_robots_rules(domain)
 
-        if robot_rules[domain] and robot_rules[domain].can_fetch("*", url):
-            site_id = site_ids.get(url, None)
-            if site_id is None:
-                site_id = get_site_id_from_url(url)
-                site_ids[url] = site_id
+            if not robot_rules[domain] or not robot_rules[domain].can_fetch("*", url):
+                print(f"Access to {url} disallowed by robots.txt")
+                continue
+
+            if robot_delays[domain]:
+                time.sleep(robot_delays[domain])
 
             content, status_code = download_page(url)
 
             if content is not None and status_code == 200:
-
                 page_type = get_page_type(url)
 
-                if page_type == 'HTML':
+                if page_type == 'HTML' or page_type == 'UNKNOWN':
                     if duplicate_detector.is_duplicate(content):
-                        datastore.store_page(site_id, 'DUPLICATE', url, None, status_code, time.strftime('%d-%m-%Y %H:%M:%S'), None)
+                        datastore.update_page_status(page_id, 'DUPLICATE', None, status_code, time.strftime('%d-%m-%Y %H:%M:%S'), None)
                     else:
                         link_tuples = extract_links(content, url)
                         images = extract_images(content)
                         html_hash = hash_html_content(content)
-                        page_id = datastore.store_page(site_id, 'HTML', url, content, status_code, time.strftime('%d-%m-%Y %H:%M:%S'), html_hash)
-
-                        from_page_id = datastore.get_page_id_by_base_url(url)
-                        if page_id and from_page_id != page_id:
-                            datastore.store_link(from_page_id, page_id)
+                        datastore.update_page_status(page_id, 'HTML', content, status_code, time.strftime('%d-%m-%Y %H:%M:%S'), html_hash)
 
                         if page_id:
                             for image_url in images:
@@ -75,17 +66,17 @@ def crawl():
 
                         for _, link_url in link_tuples:
                             canonicalized_link_url = duplicate_detector.canonicalize(link_url)
-                            frontier.add_url(canonicalized_link_url)
+                            to_page_id = datastore.store_page(site_id, 'FRONTIER', canonicalized_link_url, None, None, None, None)
+                            if to_page_id:
+                                datastore.store_link(page_id, to_page_id)
                 else:
-                    page_id = datastore.store_page(site_id, 'BINARY', url, None, status_code, time.strftime('%d-%m-%Y %H:%M:%S'), None)
+                    datastore.update_page_status(page_id, 'BINARY', None, status_code, time.strftime('%Y-%m-%d %H:%M:%S'), None)
                     if page_id and page_type != "UNKNOWN":
                         data = download_binary_content(url)
                         datastore.store_page_data(page_id, page_type, data)
             else:
                 print(f"Failed to fetch content from {url}")
-        else:
-            print(f"Access to {url} disallowed by robots.txt")
-        time.sleep(5)
+
 
 def start_crawling():
     threads = []

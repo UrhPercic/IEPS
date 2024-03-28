@@ -51,10 +51,12 @@ def fetch_robots_rules(domain):
     parser = RobotFileParser(robots_url)
     try:
         parser.read()
-        return parser
+        delay = parser.crawl_delay("*")
+        return parser, delay
     except Exception as e:
         print(f"Error fetching or parsing robots.txt for {domain}: {e}")
-    return None
+        return None, None
+
 
 def download_binary_content(url):
     try:

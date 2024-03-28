@@ -39,6 +39,12 @@ class DataStore:
                 """, (domain, robots_content, sitemap_content))
 
                 return cur.fetchone()[0]
+    def fetch_frontier_pages(self, limit=10):
+        with self.get_cursor() as cur:
+            cur.execute("""
+                SELECT id, url FROM crawldb.page WHERE page_type_code = 'FRONTIER' LIMIT %s;
+            """, (limit,))
+            return cur.fetchall()
 
     def store_page(self, site_id, page_type_code, url, html_content, http_status_code, accessed_time, content_hash):
         with self.get_cursor() as cur:
@@ -53,6 +59,11 @@ class DataStore:
                 """, (site_id, page_type_code, url, html_content, http_status_code, accessed_time, content_hash))
                 page_id = cur.fetchone()[0]
                 return page_id
+
+    def update_page_status(self, page_id, page_type_code, html_content, http_status_code, accessed_time, content_hash):
+        with self.get_cursor() as cur:
+            cur.execute("""UPDATE crawldb.page SET page_type_code = %s, html_content = %s, http_status_code = %s, accessed_time = %s, content_hash = %s WHERE id = %s;
+               """, (page_type_code, html_content, http_status_code, accessed_time, content_hash, page_id))
 
     def store_page_data(self, page_id, data_type_code, data):
         with self.get_cursor() as cur:
