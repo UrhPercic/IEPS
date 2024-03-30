@@ -1,6 +1,7 @@
 import psycopg2
 from utils import fetch_robots_content, fetch_sitemap_content
 from contextlib import contextmanager
+import threading
 
 class DataStore:
     def __init__(self, dbname='postgres', user='postgres', password='12345', host='localhost', port=5432):
@@ -13,14 +14,16 @@ class DataStore:
         }
         self.conn = psycopg2.connect(**self.conn_details)
         self.conn.autocommit = True
+        self.lock = threading.Lock()
 
     @contextmanager
     def get_cursor(self):
-        cursor = self.conn.cursor()
-        try:
-            yield cursor
-        finally:
-            cursor.close()
+        with self.lock:
+            cursor = self.conn.cursor()
+            try:
+                yield cursor
+            finally:
+                cursor.close()
 
     def get_or_create_site_id(self, domain):
         with self.get_cursor() as cur:
@@ -39,7 +42,7 @@ class DataStore:
                 """, (domain, robots_content, sitemap_content))
 
                 return cur.fetchone()[0]
-    def fetch_frontier_pages(self, limit=10):
+    def fetch_frontier_pages(self, limit=3):
         with self.get_cursor() as cur:
             cur.execute("""
                 SELECT id, url FROM crawldb.page WHERE page_type_code = 'FRONTIER' LIMIT %s;
@@ -75,25 +78,39 @@ class DataStore:
             except Exception as e:
                 print(f"Error storing page data: {e}")
 
-    def store_image(self, page_id, filename, content_type, data, accessed_time):
+    def store_images_bulk(self, images):
         with self.get_cursor() as cur:
-            try:
-                cur.execute("""
-                    INSERT INTO crawldb.image (page_id, filename, content_type, data, accessed_time)
-                    VALUES (%s, %s, %s, %s, %s)
-                    """, (page_id, filename, content_type, data, accessed_time))
-            except Exception as e:
-                print(f"Error storing image: {e}")
+            insert_query = """
+                INSERT INTO crawldb.image (page_id, filename, content_type, data, accessed_time)
+                VALUES %s
+                ON CONFLICT DO NOTHING;
+            """
+            from psycopg2.extras import execute_values
+            execute_values(cur, insert_query, images)
 
-    def store_link(self, from_page_id, to_page_id):
+    def store_pages_bulk(self, pages):
         with self.get_cursor() as cur:
+            insert_query = """
+                INSERT INTO crawldb.page (site_id, page_type_code, url, html_content, http_status_code, accessed_time, content_hash)
+                VALUES %s ON CONFLICT (url) DO NOTHING RETURNING id;
+            """
+            from psycopg2.extras import execute_values
+            execute_values(cur, insert_query, pages)
             try:
-                cur.execute("""
-                    INSERT INTO crawldb.link (from_page, to_page)
-                    VALUES (%s, %s)
-                    """, (from_page_id, to_page_id))
-            except Exception as e:
-                print(f"Error storing link: {e}")
+                page_ids = cur.fetchall()
+                return page_ids
+            except psycopg2.ProgrammingError:
+                return []
+
+    def store_links_bulk(self, links):
+        with self.get_cursor() as cur:
+            insert_query = """
+                INSERT INTO crawldb.link (from_page, to_page)
+                VALUES %s
+                ON CONFLICT DO NOTHING;
+            """
+            from psycopg2.extras import execute_values
+            execute_values(cur, insert_query, links)
 
     def check_page_exists(self, url):
         with self.get_cursor() as cur:
@@ -101,11 +118,8 @@ class DataStore:
             result = cur.fetchone()
             return result[0] if result else None
 
-    def get_page_id_by_base_url(self, url):
+    def get_robots_content(self, domain):
         with self.get_cursor() as cur:
-            base_url = url.rsplit('/', 1)[0]
-
-            cur.execute("SELECT id FROM crawldb.page WHERE url LIKE %s;", (base_url + '%',))
+            cur.execute("SELECT robots_content FROM crawldb.site WHERE domain = %s;", (domain,))
             result = cur.fetchone()
-
             return result[0] if result else None

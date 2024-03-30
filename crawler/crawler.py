@@ -21,9 +21,14 @@ num_worker_threads = 6
 
 robot_rules = {}
 robot_delays = {}
+
+
 def crawl():
     while True:
-        frontier_pages = datastore.fetch_frontier_pages(limit=10)
+        frontier_pages = datastore.fetch_frontier_pages()
+        frontier_pages_to_insert = []
+        links_to_insert = []
+        images_to_insert = []
 
         if not frontier_pages:
             time.sleep(5)
@@ -34,13 +39,9 @@ def crawl():
             site_id = datastore.get_or_create_site_id(domain)
 
             if domain not in robot_rules or domain not in robot_delays:
-                robot_rules[domain], robot_delays[domain] = fetch_robots_rules(domain)
+                robot_rules[domain], robot_delays[domain] = fetch_robots_rules(datastore, domain)
 
-            if not robot_rules[domain] or not robot_rules[domain].can_fetch("*", url):
-                print(f"Access to {url} disallowed by robots.txt")
-                continue
-
-            if robot_delays[domain]:
+            if not robot_rules[domain] or robot_rules[domain].can_fetch("*", url):
                 time.sleep(robot_delays[domain])
 
             content, status_code = download_page(url)
@@ -49,33 +50,34 @@ def crawl():
                 page_type = get_page_type(url)
 
                 if page_type == 'HTML' or page_type == 'UNKNOWN':
-                    if duplicate_detector.is_duplicate(content):
-                        datastore.update_page_status(page_id, 'DUPLICATE', None, status_code, time.strftime('%d-%m-%Y %H:%M:%S'), None)
-                    else:
-                        link_tuples = extract_links(content, url)
-                        images = extract_images(content)
+                    if not duplicate_detector.is_duplicate(content):
                         html_hash = hash_html_content(content)
                         datastore.update_page_status(page_id, 'HTML', content, status_code, time.strftime('%d-%m-%Y %H:%M:%S'), html_hash)
 
-                        if page_id:
-                            for image_url in images:
-                                content_type = get_content_type(image_url)
-                                image_data = download_and_convert_image_to_binary(url, image_url)
-                                truncated_image_url = image_url[:255]
-                                datastore.store_image(page_id, truncated_image_url, content_type, image_data, time.strftime('%d-%m-%Y %H:%M:%S'))
+                        images = extract_images(content)
+                        for image_url in images:
+                            content_type = get_content_type(image_url)
+                            image_data = download_and_convert_image_to_binary(url, image_url)
+                            truncated_image_url = image_url[:255]
+                            images_to_insert.append((page_id, truncated_image_url, content_type, image_data, time.strftime('%d-%m-%Y %H:%M:%S')))
 
+                        link_tuples = extract_links(content, url)
                         for _, link_url in link_tuples:
                             canonicalized_link_url = duplicate_detector.canonicalize(link_url)
-                            to_page_id = datastore.store_page(site_id, 'FRONTIER', canonicalized_link_url, None, None, None, None)
-                            if to_page_id:
-                                datastore.store_link(page_id, to_page_id)
+                            frontier_pages_to_insert.append((site_id, 'FRONTIER', canonicalized_link_url, None, None, None, None))
+                            links_to_insert.append((page_id, canonicalized_link_url))
+                    else:
+                        datastore.update_page_status(page_id, 'DUPLICATE', None, status_code, time.strftime('%d-%m-%Y %H:%M:%S'), None)
                 else:
                     datastore.update_page_status(page_id, 'BINARY', None, status_code, time.strftime('%Y-%m-%d %H:%M:%S'), None)
-                    if page_id and page_type != "UNKNOWN":
-                        data = download_binary_content(url)
-                        datastore.store_page_data(page_id, page_type, data)
-            else:
-                print(f"Failed to fetch content from {url}")
+
+        inserted_frontier_pages = datastore.store_pages_bulk(frontier_pages_to_insert)
+        url_to_page_id = {url: page_id for page_id, url in inserted_frontier_pages}
+        links_to_insert_final = [(from_page_id, url_to_page_id[url]) for from_page_id, url in links_to_insert if url in url_to_page_id]
+        datastore.store_links_bulk(links_to_insert_final)
+
+        if images_to_insert:
+            datastore.store_images_bulk(images_to_insert)
 
 
 def start_crawling():
