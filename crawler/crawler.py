@@ -52,14 +52,14 @@ def crawl():
                 if page_type == 'HTML' or page_type == 'UNKNOWN':
                     if not duplicate_detector.is_duplicate(content):
                         html_hash = hash_html_content(content)
-                        datastore.update_page_status(page_id, 'HTML', content, status_code, time.strftime('%d-%m-%Y %H:%M:%S'), html_hash)
+                        datastore.update_page_status(page_id, 'HTML', content, status_code, time.strftime('%Y-%m-%d %H:%M:%S'), html_hash)
 
                         images = extract_images(content)
                         for image_url in images:
                             content_type = get_content_type(image_url)
                             image_data = download_and_convert_image_to_binary(url, image_url)
                             truncated_image_url = image_url[:255]
-                            images_to_insert.append((page_id, truncated_image_url, content_type, image_data, time.strftime('%d-%m-%Y %H:%M:%S')))
+                            images_to_insert.append((page_id, truncated_image_url, content_type, image_data, time.strftime('%Y-%m-%d %H:%M:%S')))
 
                         link_tuples = extract_links(content, url)
                         for _, link_url in link_tuples:
@@ -67,12 +67,16 @@ def crawl():
                             frontier_pages_to_insert.append((site_id, 'FRONTIER', canonicalized_link_url, None, None, None, None))
                             links_to_insert.append((page_id, canonicalized_link_url))
                     else:
-                        datastore.update_page_status(page_id, 'DUPLICATE', None, status_code, time.strftime('%d-%m-%Y %H:%M:%S'), None)
+                        datastore.update_page_status(page_id, 'DUPLICATE', None, status_code, time.strftime('%Y-%m-%d %H:%M:%S'), None)
                 else:
                     datastore.update_page_status(page_id, 'BINARY', None, status_code, time.strftime('%Y-%m-%d %H:%M:%S'), None)
 
+
         inserted_frontier_pages = datastore.store_pages_bulk(frontier_pages_to_insert)
-        url_to_page_id = {url: page_id for page_id, url in inserted_frontier_pages}
+        if inserted_frontier_pages:
+            url_to_page_id = {url: page_id for page_id, url in inserted_frontier_pages}
+        else:
+            url_to_page_id = {}
         links_to_insert_final = [(from_page_id, url_to_page_id[url]) for from_page_id, url in links_to_insert if url in url_to_page_id]
         datastore.store_links_bulk(links_to_insert_final)
 

@@ -42,7 +42,7 @@ class DataStore:
                 """, (domain, robots_content, sitemap_content))
 
                 return cur.fetchone()[0]
-    def fetch_frontier_pages(self, limit=3):
+    def fetch_frontier_pages(self, limit=20):
         with self.get_cursor() as cur:
             cur.execute("""
                 SELECT id, url FROM crawldb.page WHERE page_type_code = 'FRONTIER' LIMIT %s;
@@ -92,13 +92,13 @@ class DataStore:
         with self.get_cursor() as cur:
             insert_query = """
                 INSERT INTO crawldb.page (site_id, page_type_code, url, html_content, http_status_code, accessed_time, content_hash)
-                VALUES %s ON CONFLICT (url) DO NOTHING RETURNING id;
+                VALUES %s ON CONFLICT (url) DO NOTHING RETURNING id, url;
             """
             from psycopg2.extras import execute_values
             execute_values(cur, insert_query, pages)
             try:
-                page_ids = cur.fetchall()
-                return page_ids
+                page_ids_urls = cur.fetchall()
+                return page_ids_urls
             except psycopg2.ProgrammingError:
                 return []
 
