@@ -18,6 +18,10 @@ Namestite PostgreSQL na vaš sistem in ustvarite podatkovno bazo z naslednjimi p
 - Gostitelj: `localhost`
 - Vrata: `5432`
 
+Bazo je potrebno tudi spremeniti z naslednjima dvema ukazoma:
+`ALTER TABLE crawldb.page ADD COLUMN content_hash VARCHAR(32);`
+`INSERT INTO crawldb.data_type (code) VALUES ('UNKNOWN');`
+
 Odprite ukazno vrstico ali terminal in navigirajte do mape projekta.
 
 Za namestitev potrebnih Python knjižnic izvedite naslednji ukaz:
