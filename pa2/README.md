@@ -13,7 +13,7 @@ Za uporabo regularnih izrazov za ekstrakcijo za vse strani uporabite ukaz (Rezul
 
 Za uporabo XPath za ekstrakcijo za vse strani uporabite ukaz (Rezultati bodo izpisani v konzolo): `python run-extraction.py b`
 
-Za uporabo _____ algoritma uporabite ukaz: `python run-extraction.py c`
+C Primir uporabe ni implementiran.
 
 
 
